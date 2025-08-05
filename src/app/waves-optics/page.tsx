@@ -1,22 +1,341 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Box, Sphere, Plane, Text, Line } from '@react-three/drei'
-import * as THREE from 'three'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls, Text, Line, Sphere, Box } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Play, Pause, RotateCcw, Waves, Eye } from 'lucide-react'
+import { Play, Pause, RotateCcw, Waves } from 'lucide-react'
+import * as THREE from 'three'
 
-// Wave visualization component
+// Wave visualization
 function WaveVisualization({ 
   amplitude, 
   frequency, 
   wavelength, 
-  isPlaying,\n  waveType\n}: { \n  amplitude: number; \n  frequency: number; \n  wavelength: number; \n  isPlaying: boolean;\n  waveType: 'transverse' | 'longitudinal' | 'interference'\n}) {\n  const meshRef = useRef<THREE.Mesh>(null)\n  const timeRef = useRef(0)\n  \n  useFrame((state, delta) => {\n    if (isPlaying && meshRef.current) {\n      timeRef.current += delta\n      \n      // Create wave geometry\n      const segments = 100\n      const points = []\n      \n      for (let i = 0; i <= segments; i++) {\n        const x = (i / segments) * 10 - 5\n        let y, z\n        \n        if (waveType === 'transverse') {\n          y = amplitude * Math.sin(2 * Math.PI * (x / wavelength - frequency * timeRef.current))\n          z = 0\n        } else if (waveType === 'longitudinal') {\n          y = 0\n          z = amplitude * Math.sin(2 * Math.PI * (x / wavelength - frequency * timeRef.current))\n        } else { // interference\n          const wave1 = amplitude * Math.sin(2 * Math.PI * (x / wavelength - frequency * timeRef.current))\n          const wave2 = amplitude * Math.sin(2 * Math.PI * (x / (wavelength * 1.2) - frequency * timeRef.current * 1.1))\n          y = (wave1 + wave2) / 2\n          z = 0\n        }\n        \n        points.push(new THREE.Vector3(x, y, z))\n      }\n      \n      const geometry = new THREE.BufferGeometry().setFromPoints(points)\n      meshRef.current.geometry.dispose()\n      meshRef.current.geometry = geometry\n    }\n  })\n\n  return (\n    <Line\n      ref={meshRef}\n      points={[]}\n      color={waveType === 'interference' ? '#FF6B6B' : '#4ECDC4'}\n      lineWidth={3}\n    />\n  )\n}\n\n// Light ray component\nfunction LightRay({ start, direction, length, color = '#FFD700' }: { \n  start: [number, number, number]; \n  direction: [number, number, number]; \n  length: number; \n  color?: string \n}) {\n  const end: [number, number, number] = [\n    start[0] + direction[0] * length,\n    start[1] + direction[1] * length,\n    start[2] + direction[2] * length\n  ]\n\n  return (\n    <Line\n      points={[new THREE.Vector3(...start), new THREE.Vector3(...end)]}\n      color={color}\n      lineWidth={2}\n    />\n  )\n}\n\n// Mirror component\nfunction Mirror({ position, rotation }: { position: [number, number, number]; rotation: [number, number, number] }) {\n  return (\n    <Box position={position} rotation={rotation} args={[0.1, 3, 2]}>\n      <meshStandardMaterial color=\"#C0C0C0\" metalness={0.8} roughness={0.2} />\n    </Box>\n  )\n}\n\n// Lens component\nfunction Lens({ position, focalLength }: { position: [number, number, number]; focalLength: number }) {\n  return (\n    <group position={position}>\n      <Sphere args={[0.8]}>\n        <meshStandardMaterial color=\"#87CEEB\" transparent opacity={0.6} />\n      </Sphere>\n      <Text position={[0, -1.5, 0]} fontSize={0.3} color=\"black\">\n        f = {focalLength}cm\n      </Text>\n    </group>\n  )\n}\n\n// Optics scene component\nfunction OpticsScene({ \n  objectDistance, 
-  focalLength, 
-  isPlaying,\n  opticType\n}: { \n  objectDistance: number; \n  focalLength: number; \n  isPlaying: boolean;\n  opticType: 'mirror' | 'lens' | 'refraction'\n}) {\n  const [data, setData] = useState<Array<{ time: number; intensity: number; angle: number }>>([])\n  const startTime = useRef(Date.now())\n  \n  useFrame(() => {\n    if (isPlaying) {\n      const time = (Date.now() - startTime.current) / 1000\n      const intensity = Math.abs(Math.sin(time * 2))\n      const angle = Math.sin(time) * 30\n      \n      setData(prev => {\n        const newData = [...prev, { time, intensity, angle }]\n        return newData.slice(-100)\n      })\n    }\n  })\n\n  // Calculate image distance using lens equation: 1/f = 1/do + 1/di\n  const imageDistance = (focalLength * objectDistance) / (objectDistance - focalLength)\n  const magnification = -imageDistance / objectDistance\n\n  return (\n    <>\n      <ambientLight intensity={0.5} />\n      <pointLight position={[10, 10, 10]} />\n      \n      {/* Optical bench */}\n      <Box position={[0, -2, 0]} args={[15, 0.1, 1]}>\n        <meshStandardMaterial color=\"#8B4513\" />\n      </Box>\n      \n      {/* Object */}\n      <Box position={[-objectDistance/10, -1, 0]} args={[0.2, 1, 0.2]}>\n        <meshStandardMaterial color=\"#FF6B6B\" />\n      </Box>\n      \n      {/* Optic element */}\n      {opticType === 'mirror' && (\n        <Mirror position={[0, 0, 0]} rotation={[0, Math.PI/4, 0]} />\n      )}\n      {opticType === 'lens' && (\n        <Lens position={[0, 0, 0]} focalLength={focalLength} />\n      )}\n      \n      {/* Light rays */}\n      <LightRay \n        start={[-objectDistance/10, -0.5, 0]} \n        direction={[1, 0, 0]} \n        length={objectDistance/10} \n        color=\"#FFD700\"\n      />\n      \n      {/* Reflected/Refracted rays */}\n      {opticType === 'mirror' && (\n        <LightRay \n          start={[0, -0.5, 0]} \n          direction={[0, 1, 0]} \n          length={3} \n          color=\"#FF6347\"\n        />\n      )}\n      \n      {opticType === 'lens' && Math.abs(imageDistance) < 10 && (\n        <>\n          <LightRay \n            start={[0, -0.5, 0]} \n            direction={[imageDistance > 0 ? 1 : -1, 0, 0]} \n            length={Math.abs(imageDistance)/10} \n            color=\"#FF6347\"\n          />\n          {/* Image */}\n          <Box position={[imageDistance/10, -1 + magnification, 0]} args={[0.2, Math.abs(magnification), 0.2]}>\n            <meshStandardMaterial color=\"#4ECDC4\" transparent opacity={0.7} />\n          </Box>\n        </>\n      )}\n      \n      <OrbitControls />\n      \n      <Text position={[0, 3, 0]} fontSize={0.4} color=\"black\">\n        {opticType === 'mirror' ? 'Reflection: θi = θr' : \n         opticType === 'lens' ? 'Lens Equation: 1/f = 1/do + 1/di' : \n         'Snell\\'s Law: n₁sin(θ₁) = n₂sin(θ₂)'}\n      </Text>\n    </>\n  )\n}\n\nexport default function WavesOpticsPage() {\n  const [amplitude, setAmplitude] = useState([1])\n  const [frequency, setFrequency] = useState([1])\n  const [wavelength, setWavelength] = useState([2])\n  const [objectDistance, setObjectDistance] = useState([15])\n  const [focalLength, setFocalLength] = useState([10])\n  const [isPlaying, setIsPlaying] = useState(false)\n  const [simulationData, setSimulationData] = useState<Array<{ time: number; intensity: number; angle: number }>>([])\n  const [simulationType, setSimulationType] = useState<'waves' | 'optics'>('waves')\n  const [waveType, setWaveType] = useState<'transverse' | 'longitudinal' | 'interference'>('transverse')\n  const [opticType, setOpticType] = useState<'mirror' | 'lens' | 'refraction'>('lens')\n\n  const handleReset = () => {\n    setIsPlaying(false)\n    setSimulationData([])\n  }\n\n  const calculateWaveProperties = () => {\n    const waveSpeed = frequency[0] * wavelength[0]\n    const period = 1 / frequency[0]\n    const angularFrequency = 2 * Math.PI * frequency[0]\n    \n    return {\n      waveSpeed: waveSpeed.toFixed(2),\n      period: period.toFixed(2),\n      angularFrequency: angularFrequency.toFixed(2)\n    }\n  }\n\n  const calculateOpticsProperties = () => {\n    const imageDistance = (focalLength[0] * objectDistance[0]) / (objectDistance[0] - focalLength[0])\n    const magnification = -imageDistance / objectDistance[0]\n    \n    return {\n      imageDistance: imageDistance.toFixed(2),\n      magnification: magnification.toFixed(2),\n      imageType: Math.abs(imageDistance) > 0 ? (imageDistance > 0 ? 'Real' : 'Virtual') : 'At infinity'\n    }\n  }\n\n  const waveProps = calculateWaveProperties()\n  const opticsProps = calculateOpticsProperties()\n\n  return (\n    <div className=\"container mx-auto px-4 py-8\">\n      <div className=\"mb-8\">\n        <h1 className=\"text-4xl font-bold mb-4\">Waves & Optics</h1>\n        <p className=\"text-lg text-muted-foreground mb-6\">\n          Explore wave phenomena, interference, and optical principles\n        </p>\n      </div>\n\n      <div className=\"mb-6\">\n        <div className=\"flex gap-2\">\n          <Button \n            variant={simulationType === 'waves' ? 'default' : 'outline'}\n            onClick={() => setSimulationType('waves')}\n          >\n            <Waves className=\"h-4 w-4 mr-2\" />\n            Waves\n          </Button>\n          <Button \n            variant={simulationType === 'optics' ? 'default' : 'outline'}\n            onClick={() => setSimulationType('optics')}\n          >\n            <Eye className=\"h-4 w-4 mr-2\" />\n            Optics\n          </Button>\n        </div>\n      </div>\n\n      <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n        {/* 3D Scene */}\n        <div className=\"lg:col-span-2\">\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                {simulationType === 'waves' ? <Waves className=\"h-5 w-5\" /> : <Eye className=\"h-5 w-5\" />}\n                3D {simulationType === 'waves' ? 'Wave' : 'Optics'} Simulation\n              </CardTitle>\n              <CardDescription>\n                Interactive visualization of {simulationType === 'waves' ? 'wave propagation and interference' : 'optical phenomena'}\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              <div className=\"h-96 rounded-lg overflow-hidden bg-gradient-to-b from-indigo-100 to-purple-100\">\n                <Canvas camera={{ position: [8, 5, 8], fov: 75 }}>\n                  {simulationType === 'waves' ? (\n                    <>\n                      <WaveVisualization \n                        amplitude={amplitude[0]} \n                        frequency={frequency[0]} \n                        wavelength={wavelength[0]} \n                        isPlaying={isPlaying}\n                        waveType={waveType}\n                      />\n                      <gridHelper args={[10, 10]} />\n                    </>\n                  ) : (\n                    <OpticsScene \n                      objectDistance={objectDistance[0]} \n                      focalLength={focalLength[0]} \n                      isPlaying={isPlaying}\n                      opticType={opticType}\n                    />\n                  )}\n                </Canvas>\n              </div>\n              <div className=\"flex gap-2 mt-4\">\n                <Button \n                  onClick={() => setIsPlaying(!isPlaying)}\n                  variant={isPlaying ? \"secondary\" : \"default\"}\n                >\n                  {isPlaying ? <Pause className=\"h-4 w-4 mr-2\" /> : <Play className=\"h-4 w-4 mr-2\" />}\n                  {isPlaying ? 'Pause' : 'Play'}\n                </Button>\n                <Button onClick={handleReset} variant=\"outline\">\n                  <RotateCcw className=\"h-4 w-4 mr-2\" />\n                  Reset\n                </Button>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n\n        {/* Controls */}\n        <div className=\"space-y-6\">\n          <Card>\n            <CardHeader>\n              <CardTitle>Simulation Controls</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-6\">\n              {simulationType === 'waves' ? (\n                <>\n                  <div className=\"space-y-2\">\n                    <Label>Wave Type</Label>\n                    <div className=\"flex gap-2\">\n                      <Button \n                        size=\"sm\" \n                        variant={waveType === 'transverse' ? 'default' : 'outline'}\n                        onClick={() => setWaveType('transverse')}\n                      >\n                        Transverse\n                      </Button>\n                      <Button \n                        size=\"sm\" \n                        variant={waveType === 'longitudinal' ? 'default' : 'outline'}\n                        onClick={() => setWaveType('longitudinal')}\n                      >\n                        Longitudinal\n                      </Button>\n                      <Button \n                        size=\"sm\" \n                        variant={waveType === 'interference' ? 'default' : 'outline'}\n                        onClick={() => setWaveType('interference')}\n                      >\n                        Interference\n                      </Button>\n                    </div>\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Amplitude: {amplitude[0]}</Label>\n                    <Slider\n                      value={amplitude}\n                      onValueChange={setAmplitude}\n                      max={2}\n                      min={0.1}\n                      step={0.1}\n                      className=\"w-full\"\n                    />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Frequency (Hz): {frequency[0]}</Label>\n                    <Slider\n                      value={frequency}\n                      onValueChange={setFrequency}\n                      max={5}\n                      min={0.1}\n                      step={0.1}\n                      className=\"w-full\"\n                    />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Wavelength (m): {wavelength[0]}</Label>\n                    <Slider\n                      value={wavelength}\n                      onValueChange={setWavelength}\n                      max={5}\n                      min={0.5}\n                      step={0.1}\n                      className=\"w-full\"\n                    />\n                  </div>\n                </>\n              ) : (\n                <>\n                  <div className=\"space-y-2\">\n                    <Label>Optic Type</Label>\n                    <div className=\"flex gap-2\">\n                      <Button \n                        size=\"sm\" \n                        variant={opticType === 'mirror' ? 'default' : 'outline'}\n                        onClick={() => setOpticType('mirror')}\n                      >\n                        Mirror\n                      </Button>\n                      <Button \n                        size=\"sm\" \n                        variant={opticType === 'lens' ? 'default' : 'outline'}\n                        onClick={() => setOpticType('lens')}\n                      >\n                        Lens\n                      </Button>\n                    </div>\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Object Distance (cm): {objectDistance[0]}</Label>\n                    <Slider\n                      value={objectDistance}\n                      onValueChange={setObjectDistance}\n                      max={30}\n                      min={5}\n                      step={1}\n                      className=\"w-full\"\n                    />\n                  </div>\n                  \n                  {opticType === 'lens' && (\n                    <div className=\"space-y-2\">\n                      <Label>Focal Length (cm): {focalLength[0]}</Label>\n                      <Slider\n                        value={focalLength}\n                        onValueChange={setFocalLength}\n                        max={20}\n                        min={5}\n                        step={1}\n                        className=\"w-full\"\n                      />\n                    </div>\n                  )}\n                </>\n              )}\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardHeader>\n              <CardTitle>\n                {simulationType === 'waves' ? 'Wave Properties' : 'Optics Calculations'}\n              </CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              {simulationType === 'waves' ? (\n                <div className=\"grid grid-cols-1 gap-4 text-sm\">\n                  <div>\n                    <div className=\"font-medium\">Wave Speed</div>\n                    <div className=\"text-2xl font-bold text-blue-600\">{waveProps.waveSpeed} m/s</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Period</div>\n                    <div className=\"text-2xl font-bold text-green-600\">{waveProps.period} s</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Angular Frequency</div>\n                    <div className=\"text-2xl font-bold text-purple-600\">{waveProps.angularFrequency} rad/s</div>\n                  </div>\n                </div>\n              ) : (\n                <div className=\"grid grid-cols-1 gap-4 text-sm\">\n                  <div>\n                    <div className=\"font-medium\">Image Distance</div>\n                    <div className=\"text-2xl font-bold text-blue-600\">{opticsProps.imageDistance} cm</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Magnification</div>\n                    <div className=\"text-2xl font-bold text-green-600\">{opticsProps.magnification}x</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Image Type</div>\n                    <div className=\"text-lg font-bold text-purple-600\">{opticsProps.imageType}</div>\n                  </div>\n                </div>\n              )}\n            </CardContent>\n          </Card>\n        </div>\n      </div>\n\n      {/* Data Visualization */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>\n            {simulationType === 'waves' ? 'Wave Analysis' : 'Optics Data'}\n          </CardTitle>\n          <CardDescription>\n            Real-time visualization of {simulationType === 'waves' ? 'wave properties' : 'optical measurements'}\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <Tabs defaultValue=\"intensity\" className=\"w-full\">\n            <TabsList className=\"grid w-full grid-cols-2\">\n              <TabsTrigger value=\"intensity\">Intensity</TabsTrigger>\n              <TabsTrigger value=\"angle\">Angle/Position</TabsTrigger>\n            </TabsList>\n            <TabsContent value=\"intensity\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: 'Intensity', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"intensity\" stroke=\"#8884d8\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"angle\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: simulationType === 'waves' ? 'Angle (°)' : 'Position (cm)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"angle\" stroke=\"#82ca9d\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n          </Tabs>\n        </CardContent>\n      </Card>\n\n      {/* Educational Content */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>\n            {simulationType === 'waves' ? 'Wave Principles' : 'Optics Principles'}\n          </CardTitle>\n        </CardHeader>\n        <CardContent className=\"space-y-4\">\n          {simulationType === 'waves' ? (\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Wave Properties</h3>\n                <ul className=\"text-sm text-muted-foreground space-y-1\">\n                  <li>• Amplitude: Maximum displacement</li>\n                  <li>• Wavelength: Distance between peaks</li>\n                  <li>• Frequency: Oscillations per second</li>\n                  <li>• Speed: v = fλ</li>\n                </ul>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Interference</h3>\n                <p className=\"text-sm text-muted-foreground\">\n                  When two waves meet, they can interfere constructively (amplitudes add) \n                  or destructively (amplitudes subtract).\n                </p>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Wave Types</h3>\n                <ul className=\"text-sm text-muted-foreground space-y-1\">\n                  <li>• Transverse: Perpendicular oscillation</li>\n                  <li>• Longitudinal: Parallel oscillation</li>\n                  <li>• Mechanical: Require medium</li>\n                  <li>• Electromagnetic: No medium needed</li>\n                </ul>\n              </div>\n            </div>\n          ) : (\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Reflection</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Angle of incidence equals angle of reflection.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  θi = θr\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Refraction</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Bending of light when passing between media.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  n₁sin(θ₁) = n₂sin(θ₂)\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Lens Equation</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Relates object distance, image distance, and focal length.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  1/f = 1/do + 1/di\n                </div>\n              </div>\n            </div>\n          )}\n        </CardContent>\n      </Card>\n    </div>\n  )\n}
+  isPlaying 
+}: { 
+  amplitude: number; 
+  frequency: number; 
+  wavelength: number; 
+  isPlaying: boolean 
+}) {
+  const [time, setTime] = useState(0)
+  
+  useFrame(() => {
+    if (isPlaying) {
+      setTime(prev => prev + 0.05)
+    }
+  })
+  
+  const points = []
+  const numPoints = 100
+  
+  for (let i = 0; i <= numPoints; i++) {
+    const x = (i / numPoints) * wavelength * 2 - wavelength
+    const y = amplitude * Math.sin((2 * Math.PI / wavelength) * x - 2 * Math.PI * frequency * time)
+    points.push(new THREE.Vector3(x, y, 0))
+  }
+  
+  return (
+    <Line
+      points={points}
+      color="#3B82F6"
+      lineWidth={3}
+    />
+  )
+}
+
+// Interference pattern
+function InterferencePattern({ 
+  source1, 
+  source2, 
+  isPlaying 
+}: { 
+  source1: [number, number, number]; 
+  source2: [number, number, number]; 
+  isPlaying: boolean 
+}) {
+  const [time, setTime] = useState(0)
+  
+  useFrame(() => {
+    if (isPlaying) {
+      setTime(prev => prev + 0.05)
+    }
+  })
+  
+  const points = []
+  const gridSize = 20
+  const spacing = 0.5
+  
+  for (let i = 0; i <= gridSize; i++) {
+    for (let j = 0; j <= gridSize; j++) {
+      const x = (i - gridSize/2) * spacing
+      const z = (j - gridSize/2) * spacing
+      
+      // Calculate distances from sources
+      const d1 = Math.sqrt(Math.pow(x - source1[0], 2) + Math.pow(z - source1[2], 2))
+      const d2 = Math.sqrt(Math.pow(x - source2[0], 2) + Math.pow(z - source2[2], 2))
+      
+      // Calculate wave amplitudes
+      const a1 = Math.sin(2 * Math.PI * (d1 / 2 - time))
+      const a2 = Math.sin(2 * Math.PI * (d2 / 2 - time))
+      
+      // Superposition
+      const amplitude = a1 + a2
+      
+      if (Math.abs(amplitude) > 0.5) {
+        points.push(new THREE.Vector3(x, amplitude * 0.5, z))
+      }
+    }
+  }
+  
+  return (
+    <group>
+      {points.map((point, i) => (
+        <Sphere key={i} position={point} args={[0.05]}>
+          <meshStandardMaterial 
+            color={point.y > 0 ? "#FF6B6B" : "#4ECDC4"} 
+            transparent 
+            opacity={0.7} 
+          />
+        </Sphere>
+      ))}
+    </group>
+  )
+}
+
+// Main component
+export default function WavesOpticsPage() {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [amplitude, setAmplitude] = useState([1])
+  const [frequency, setFrequency] = useState([1])
+  const [wavelength, setWavelength] = useState([2])
+  const [tab, setTab] = useState('wave')
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">Waves & Optics</h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Visualize wave propagation, interference patterns, and optical phenomena through interactive simulations.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Waves className="h-5 w-5" />
+                  3D Simulation
+                </CardTitle>
+                <CardDescription>
+                  Interactive waves and optics simulation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 rounded-lg overflow-hidden">
+                  <Canvas camera={{ position: [0, 5, 10], fov: 50 }}>
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    
+                    {tab === 'wave' && (
+                      <WaveVisualization 
+                        amplitude={amplitude[0]} 
+                        frequency={frequency[0]} 
+                        wavelength={wavelength[0]} 
+                        isPlaying={isPlaying} 
+                      />
+                    )}
+                    
+                    {tab === 'interference' && (
+                      <InterferencePattern 
+                        source1={[-2, 0, 0]} 
+                        source2={[2, 0, 0]} 
+                        isPlaying={isPlaying} 
+                      />
+                    )}
+                    
+                    <OrbitControls />
+                  </Canvas>
+                </div>
+                
+                <div className="flex justify-center gap-4 mt-4">
+                  <Button 
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="gap-2"
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIsPlaying(false)
+                      setAmplitude([1])
+                      setFrequency([1])
+                      setWavelength([2])
+                    }}
+                    className="gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Controls</CardTitle>
+                <CardDescription>
+                  Adjust simulation parameters
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Tabs value={tab} onValueChange={setTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="wave">Wave</TabsTrigger>
+                    <TabsTrigger value="interference">Interference</TabsTrigger>
+                    <TabsTrigger value="optics">Optics</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="wave" className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Amplitude: {amplitude[0]}
+                      </label>
+                      <Slider
+                        value={amplitude}
+                        onValueChange={setAmplitude}
+                        max={3}
+                        min={0.1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Frequency: {frequency[0]} Hz
+                      </label>
+                      <Slider
+                        value={frequency}
+                        onValueChange={setFrequency}
+                        max={5}
+                        min={0.1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Wavelength: {wavelength[0]} m
+                      </label>
+                      <Slider
+                        value={wavelength}
+                        onValueChange={setWavelength}
+                        max={5}
+                        min={0.5}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="interference" className="space-y-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        Two-source interference pattern
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Red points: constructive interference<br />
+                        Blue points: destructive interference
+                      </p>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="optics" className="space-y-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        Optics simulation coming soon
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Information</CardTitle>
+                <CardDescription>
+                  Physics concepts demonstrated
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Wave Equation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    y = A sin(kx - ωt)
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Describes wave motion with amplitude A, wave number k, and angular frequency ω.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Wave Properties</h4>
+                  <p className="text-sm text-muted-foreground">
+                    v = fλ
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Wave speed equals frequency times wavelength.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Interference</h4>
+                  <p className="text-sm text-muted-foreground">
+                    When waves overlap, they add constructively or destructively.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Helper hook for frame updates
+function useFrame(callback: (state: any, delta: number) => void) {
+  const requestRef = useRef<number>()
+  const previousTimeRef = useRef<number>()
+  
+  useEffect(() => {
+    const animate = (time: number) => {
+      if (previousTimeRef.current !== undefined) {
+        const deltaTime = (time - previousTimeRef.current) / 1000
+        callback({ time }, deltaTime)
+      }
+      previousTimeRef.current = time
+      requestRef.current = requestAnimationFrame(animate)
+    }
+    
+    requestRef.current = requestAnimationFrame(animate)
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+      }
+    }
+  }, [callback])
+}
