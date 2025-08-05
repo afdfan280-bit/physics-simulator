@@ -1,28 +1,356 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Box, Sphere, Plane, Text, Cylinder } from '@react-three/drei'
-import { Physics, useBox, usePlane, useSphere } from '@react-three/cannon'
-import * as THREE from 'three'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Canvas } from '@react-three/fiber'
+import { Physics, useBox, useSphere, usePlane } from '@react-three/cannon'
+import { OrbitControls, Text, Line, Sphere, Box, Cylinder } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { Play, Pause, RotateCcw, Atom, Zap } from 'lucide-react'
+import { Play, Pause, RotateCcw, Atom } from 'lucide-react'
+import * as THREE from 'three'
 
 // Inclined plane
 function InclinedPlane({ angle }: { angle: number }) {
   const [ref] = useBox(() => ({ 
     position: [0, -2, 0], 
-    rotation: [0, 0, angle * Math.PI / 180], 
+    rotation: [0, 0, -angle * Math.PI / 180], 
     args: [8, 0.2, 4],
     type: 'Static'
   }))
   
   return (
     <Box ref={ref} args={[8, 0.2, 4]}>
-      <meshStandardMaterial color=\"#8B4513\" />\n    </Box>\n  )
-n}\n\n// Rolling object\nfunction RollingObject({ \n  position, \n  mass, \n  radius,\n  isPlaying,\n  angle\n}: { \n  position: [number, number, number]; \n  mass: number; \n  radius: number;\n  isPlaying: boolean;\n  angle: number\n}) {\n  const [ref, api] = useSphere(() => ({ \n    mass, \n    position, \n    args: [radius],\n    linearDamping: 0.1,\n    angularDamping: 0.1\n  }))\n  \n  const [kineticEnergy, setKineticEnergy] = useState(0)\n  const [potentialEnergy, setPotentialEnergy] = useState(0)\n  const [totalEnergy, setTotalEnergy] = useState(0)\n  \n  useFrame(() => {\n    if (ref.current && isPlaying) {\n      const pos = ref.current.position\n      const vel = ref.current.velocity\n      \n      // Calculate energies\n      const height = Math.max(0, pos.y + 2)\n      const pe = mass * 9.81 * height\n      const ke = 0.5 * mass * (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)\n      const total = pe + ke\n      \n      setPotentialEnergy(pe)\n      setKineticEnergy(ke)\n      setTotalEnergy(total)\n    }\n  })\n\n  return (\n    <>\n      <Sphere ref={ref} args={[radius]}>\n        <meshStandardMaterial color=\"#FF6B6B\" />\n      </Sphere>\n      \n      {/* Energy indicators */}\n      <group position={[position[0] + 2, position[1] + 1, position[2]]}>\n        <Text fontSize={0.3} color=\"blue\">\n          KE: {kineticEnergy.toFixed(1)}J\n        </Text>\n        <Text position={[0, -0.4, 0]} fontSize={0.3} color=\"green\">\n          PE: {potentialEnergy.toFixed(1)}J\n        </Text>\n        <Text position={[0, -0.8, 0]} fontSize={0.3} color=\"purple\">\n          Total: {totalEnergy.toFixed(1)}J\n        </Text>\n      </group>\n    </>\n  )\n}\n\n// Simple lever\nfunction LeverSystem() {\n  const [ref] = useBox(() => ({ \n    position: [0, 0, 0], \n    rotation: [0, 0, 0], \n    args: [6, 0.1, 1],\n    type: 'Static'\n  }))\n  \n  return (\n    <group>\n      {/* Lever beam */}\n      <Box ref={ref} args={[6, 0.1, 1]}>\n        <meshStandardMaterial color=\"#654321\" />\n      </Box>\n      \n      {/* Fulcrum */}\n      <Cylinder position={[0, -0.5, 0]} args={[0.2, 0.2, 1]} rotation={[Math.PI/2, 0, 0]}>\n        <meshStandardMaterial color=\"#333333\" />\n      </Cylinder>\n      \n      {/* Load */}\n      <Box position={[-2, 0.5, 0]} args={[0.5, 0.5, 0.5]}>\n        <meshStandardMaterial color=\"#FF4444\" />\n      </Box>\n      \n      {/* Effort */}\n      <Box position={[2, 0.5, 0]} args={[0.3, 0.3, 0.3]}>\n        <meshStandardMaterial color=\"#4444FF\" />\n      </Box>\n    </group>\n  )\n}\n\n// Main scene component\nfunction EnergyScene({ \n  mass, \n  height, \n  angle, \n  isPlaying,\n  sceneType\n}: { \n  mass: number; \n  height: number; \n  angle: number; \n  isPlaying: boolean;\n  sceneType: 'incline' | 'lever' | 'pendulum'\n}) {\n  const [data, setData] = useState<Array<{ time: number; kinetic: number; potential: number; total: number }>>([])\n  const startTime = useRef(Date.now())\n  \n  useFrame(() => {\n    if (isPlaying) {\n      const time = (Date.now() - startTime.current) / 1000\n      \n      // Simulate energy conservation\n      let ke, pe\n      if (sceneType === 'incline') {\n        const currentHeight = height * Math.cos(time * 0.5)\n        pe = mass * 9.81 * currentHeight\n        ke = mass * 9.81 * (height - currentHeight) // Simplified\n      } else {\n        const oscillation = Math.sin(time * 2) * 0.5 + 0.5\n        pe = mass * 9.81 * height * oscillation\n        ke = mass * 9.81 * height * (1 - oscillation)\n      }\n      \n      const total = pe + ke\n      \n      setData(prev => {\n        const newData = [...prev, { time, kinetic: ke, potential: pe, total }]\n        return newData.slice(-100)\n      })\n    }\n  })\n\n  return (\n    <>\n      <ambientLight intensity={0.5} />\n      <pointLight position={[10, 10, 10]} />\n      <Physics gravity={[0, -9.81, 0]}>\n        {sceneType === 'incline' && (\n          <>\n            <InclinedPlane angle={angle} />\n            <RollingObject \n              position={[-3, height + 1, 0]} \n              mass={mass} \n              radius={0.3}\n              isPlaying={isPlaying}\n              angle={angle}\n            />\n          </>\n        )}\n        {sceneType === 'lever' && <LeverSystem />}\n      </Physics>\n      <OrbitControls />\n      \n      <Text position={[0, 4, 0]} fontSize={0.5} color=\"black\">\n        Conservation of Energy: KE + PE = constant\n      </Text>\n    </>\n  )\n}\n\nexport default function EnergyWorkPage() {\n  const [mass, setMass] = useState([2])\n  const [height, setHeight] = useState([3])\n  const [angle, setAngle] = useState([30])\n  const [isPlaying, setIsPlaying] = useState(false)\n  const [simulationData, setSimulationData] = useState<Array<{ time: number; kinetic: number; potential: number; total: number }>>([])\n  const [sceneType, setSceneType] = useState<'incline' | 'lever' | 'pendulum'>('incline')\n\n  const handleReset = () => {\n    setIsPlaying(false)\n    setSimulationData([])\n  }\n\n  const calculateEnergy = () => {\n    const potentialEnergy = mass[0] * 9.81 * height[0]\n    const workDone = potentialEnergy\n    const efficiency = 85 // Simplified efficiency percentage\n    \n    return {\n      potentialEnergy: potentialEnergy.toFixed(2),\n      workDone: workDone.toFixed(2),\n      efficiency,\n      power: (workDone / 1).toFixed(2) // Power if work done in 1 second\n    }\n  }\n\n  const energy = calculateEnergy()\n\n  return (\n    <div className=\"container mx-auto px-4 py-8\">\n      <div className=\"mb-8\">\n        <h1 className=\"text-4xl font-bold mb-4\">Energy & Work</h1>\n        <p className=\"text-lg text-muted-foreground mb-6\">\n          Explore conservation of energy, work calculations, and simple machines\n        </p>\n      </div>\n\n      <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n        {/* 3D Scene */}\n        <div className=\"lg:col-span-2\">\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                <Atom className=\"h-5 w-5\" />\n                3D Energy Simulation\n              </CardTitle>\n              <CardDescription>\n                Interactive visualization of energy conservation and work\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              <div className=\"h-96 rounded-lg overflow-hidden bg-gradient-to-b from-yellow-100 to-orange-100\">\n                <Canvas camera={{ position: [8, 5, 8], fov: 75 }}>\n                  <EnergyScene \n                    mass={mass[0]} \n                    height={height[0]} \n                    angle={angle[0]} \n                    isPlaying={isPlaying}\n                    sceneType={sceneType}\n                  />\n                </Canvas>\n              </div>\n              <div className=\"flex gap-2 mt-4\">\n                <Button \n                  onClick={() => setIsPlaying(!isPlaying)}\n                  variant={isPlaying ? \"secondary\" : \"default\"}\n                >\n                  {isPlaying ? <Pause className=\"h-4 w-4 mr-2\" /> : <Play className=\"h-4 w-4 mr-2\" />}\n                  {isPlaying ? 'Pause' : 'Play'}\n                </Button>\n                <Button onClick={handleReset} variant=\"outline\">\n                  <RotateCcw className=\"h-4 w-4 mr-2\" />\n                  Reset\n                </Button>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n\n        {/* Controls */}\n        <div className=\"space-y-6\">\n          <Card>\n            <CardHeader>\n              <CardTitle>Simulation Controls</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-6\">\n              <div className=\"space-y-2\">\n                <Label>Scene Type</Label>\n                <div className=\"flex gap-2\">\n                  <Button \n                    size=\"sm\" \n                    variant={sceneType === 'incline' ? 'default' : 'outline'}\n                    onClick={() => setSceneType('incline')}\n                  >\n                    Incline\n                  </Button>\n                  <Button \n                    size=\"sm\" \n                    variant={sceneType === 'lever' ? 'default' : 'outline'}\n                    onClick={() => setSceneType('lever')}\n                  >\n                    Lever\n                  </Button>\n                </div>\n              </div>\n              \n              <div className=\"space-y-2\">\n                <Label>Mass (kg): {mass[0]}</Label>\n                <Slider\n                  value={mass}\n                  onValueChange={setMass}\n                  max={10}\n                  min={0.5}\n                  step={0.5}\n                  className=\"w-full\"\n                />\n              </div>\n              \n              <div className=\"space-y-2\">\n                <Label>Height (m): {height[0]}</Label>\n                <Slider\n                  value={height}\n                  onValueChange={setHeight}\n                  max={5}\n                  min={1}\n                  step={0.5}\n                  className=\"w-full\"\n                />\n              </div>\n              \n              {sceneType === 'incline' && (\n                <div className=\"space-y-2\">\n                  <Label>Angle (degrees): {angle[0]}</Label>\n                  <Slider\n                    value={angle}\n                    onValueChange={setAngle}\n                    max={60}\n                    min={10}\n                    step={5}\n                    className=\"w-full\"\n                  />\n                </div>\n              )}\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardHeader>\n              <CardTitle>Energy Calculations</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              <div className=\"grid grid-cols-2 gap-4 text-sm\">\n                <div>\n                  <div className=\"font-medium\">Potential Energy</div>\n                  <div className=\"text-2xl font-bold text-green-600\">{energy.potentialEnergy} J</div>\n                </div>\n                <div>\n                  <div className=\"font-medium\">Work Done</div>\n                  <div className=\"text-2xl font-bold text-blue-600\">{energy.workDone} J</div>\n                </div>\n                <div>\n                  <div className=\"font-medium\">Power (1s)</div>\n                  <div className=\"text-2xl font-bold text-purple-600\">{energy.power} W</div>\n                </div>\n                <div>\n                  <div className=\"font-medium\">Efficiency</div>\n                  <div className=\"text-2xl font-bold text-orange-600\">{energy.efficiency}%</div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n      </div>\n\n      {/* Data Visualization */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>Energy Data</CardTitle>\n          <CardDescription>\n            Real-time visualization of energy conservation\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <Tabs defaultValue=\"line\" className=\"w-full\">\n            <TabsList className=\"grid w-full grid-cols-2\">\n              <TabsTrigger value=\"line\">Energy vs Time</TabsTrigger>\n              <TabsTrigger value=\"bar\">Energy Distribution</TabsTrigger>\n            </TabsList>\n            <TabsContent value=\"line\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: 'Energy (J)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"kinetic\" stroke=\"#FF6B6B\" strokeWidth={2} name=\"Kinetic Energy\" />\n                  <Line type=\"monotone\" dataKey=\"potential\" stroke=\"#4ECDC4\" strokeWidth={2} name=\"Potential Energy\" />\n                  <Line type=\"monotone\" dataKey=\"total\" stroke=\"#45B7D1\" strokeWidth={2} name=\"Total Energy\" />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"bar\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <BarChart data={simulationData.slice(-1)}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" />\n                  <YAxis label={{ value: 'Energy (J)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Bar dataKey=\"kinetic\" fill=\"#FF6B6B\" name=\"Kinetic Energy\" />\n                  <Bar dataKey=\"potential\" fill=\"#4ECDC4\" name=\"Potential Energy\" />\n                </BarChart>\n              </ResponsiveContainer>\n            </TabsContent>\n          </Tabs>\n        </CardContent>\n      </Card>\n\n      {/* Educational Content */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>Energy Conservation & Work</CardTitle>\n        </CardHeader>\n        <CardContent className=\"space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n            <div className=\"p-4 border rounded-lg\">\n              <h3 className=\"font-semibold mb-2\">Kinetic Energy</h3>\n              <p className=\"text-sm text-muted-foreground mb-3\">\n                Energy of motion. Depends on mass and velocity.\n              </p>\n              <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                KE = ½mv²\n              </div>\n            </div>\n            <div className=\"p-4 border rounded-lg\">\n              <h3 className=\"font-semibold mb-2\">Potential Energy</h3>\n              <p className=\"text-sm text-muted-foreground mb-3\">\n                Stored energy due to position or configuration.\n              </p>\n              <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                PE = mgh\n              </div>\n            </div>\n            <div className=\"p-4 border rounded-lg\">\n              <h3 className=\"font-semibold mb-2\">Work-Energy Theorem</h3>\n              <p className=\"text-sm text-muted-foreground mb-3\">\n                Work done equals change in kinetic energy.\n              </p>\n              <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                W = ΔKE = F × d\n              </div>\n            </div>\n          </div>\n          \n          <div className=\"p-4 border rounded-lg\">\n            <h3 className=\"font-semibold mb-2\">Simple Machines</h3>\n            <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n              <div>\n                <h4 className=\"font-medium mb-2\">Mechanical Advantage</h4>\n                <p className=\"text-sm text-muted-foreground\">\n                  The ratio of output force to input force. Simple machines \n                  allow us to do work with less effort by trading force for distance.\n                </p>\n              </div>\n              <div>\n                <h4 className=\"font-medium mb-2\">Efficiency</h4>\n                <p className=\"text-sm text-muted-foreground\">\n                  The ratio of useful work output to work input. No machine is \n                  100% efficient due to friction and other energy losses.\n                </p>\n              </div>\n            </div>\n          </div>\n        </CardContent>\n      </Card>\n    </div>\n  )\n}
+      <meshStandardMaterial color="#8B4513" />
+    </Box>
+  )
+}
+
+// Rolling object
+function RollingObject({ 
+  position, 
+  mass, 
+  radius,
+  isPlaying,
+  angle
+}: { 
+  position: [number, number, number]; 
+  mass: number; 
+  radius: number;
+  isPlaying: boolean;
+  angle: number
+}) {
+  const [ref, api] = useSphere(() => ({ 
+    mass, 
+    position, 
+    args: [radius],
+    linearDamping: 0.1,
+    angularDamping: 0.1
+  }))
+  
+  const [kineticEnergy, setKineticEnergy] = useState(0)
+  const [potentialEnergy, setPotentialEnergy] = useState(0)
+  const [totalEnergy, setTotalEnergy] = useState(0)
+  
+  useFrame(() => {
+    if (ref.current && isPlaying) {
+      const pos = ref.current.position
+      const vel = ref.current.velocity
+      
+      // Calculate energies
+      const height = Math.max(0, pos.y + 2)
+      const pe = mass * 9.81 * height
+      const ke = 0.5 * mass * (vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+      const total = pe + ke
+      
+      setPotentialEnergy(pe)
+      setKineticEnergy(ke)
+      setTotalEnergy(total)
+    }
+  })
+
+  return (
+    <>
+      <Sphere ref={ref} args={[radius]}>
+        <meshStandardMaterial color="#FF6B6B" />
+      </Sphere>
+      
+      {/* Energy indicators */}
+      <group position={[position[0] + 2, position[1] + 1, position[2]]}>
+        <Text fontSize={0.3} color="blue">
+          KE: {kineticEnergy.toFixed(1)}J
+        </Text>
+        <Text position={[0, -0.4, 0]} fontSize={0.3} color="green">
+          PE: {potentialEnergy.toFixed(1)}J
+        </Text>
+        <Text position={[0, -0.8, 0]} fontSize={0.3} color="purple">
+          Total: {totalEnergy.toFixed(1)}J
+        </Text>
+      </group>
+    </>
+  )
+}
+
+// Simple lever
+function LeverSystem() {
+  const [ref] = useBox(() => ({ 
+    position: [0, 0, 0], 
+    rotation: [0, 0, 0], 
+    args: [6, 0.1, 1],
+    type: 'Static'
+  }))
+  
+  return (
+    <group>
+      {/* Lever beam */}
+      <Box ref={ref} args={[6, 0.1, 1]}>
+        <meshStandardMaterial color="#654321" />
+      </Box>
+      
+      {/* Fulcrum */}
+      <Cylinder position={[0, -0.5, 0]} args={[0.2, 0.2, 1]} rotation={[Math.PI/2, 0, 0]}>
+        <meshStandardMaterial color="#333333" />
+      </Cylinder>
+      
+      {/* Load */}
+      <Box position={[-2, 0.5, 0]} args={[0.5, 0.5, 0.5]}>
+        <meshStandardMaterial color="#FF4444" />
+      </Box>
+      
+      {/* Effort */}
+      <Box position={[2, 0.5, 0]} args={[0.3, 0.3, 0.3]}>
+        <meshStandardMaterial color="#4444FF" />
+      </Box>
+    </group>
+  )
+}
+
+// Main component
+export default function EnergyWorkPage() {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [mass, setMass] = useState([1])
+  const [height, setHeight] = useState([3])
+  const [angle, setAngle] = useState([30])
+  const [sceneType, setSceneType] = useState<'incline' | 'lever' | 'pendulum'>('incline')
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">Energy & Work</h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Explore conservation of energy, work calculations, and simple machines through interactive simulations.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Atom className="h-5 w-5" />
+                  3D Simulation
+                </CardTitle>
+                <CardDescription>
+                  Interactive energy and work simulation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 rounded-lg overflow-hidden">
+                  <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    <Physics gravity={[0, -9.81, 0]}>
+                      {sceneType === 'incline' && (
+                        <>
+                          <InclinedPlane angle={angle[0]} />
+                          <RollingObject 
+                            position={[-3, height[0] + 1, 0]} 
+                            mass={mass[0]} 
+                            radius={0.5}
+                            isPlaying={isPlaying}
+                            angle={angle[0]}
+                          />
+                        </>
+                      )}
+                      {sceneType === 'lever' && <LeverSystem />}
+                    </Physics>
+                    <OrbitControls />
+                  </Canvas>
+                </div>
+                
+                <div className="flex justify-center gap-4 mt-4">
+                  <Button 
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="gap-2"
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIsPlaying(false)
+                      setMass([1])
+                      setHeight([3])
+                      setAngle([30])
+                    }}
+                    className="gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Controls</CardTitle>
+                <CardDescription>
+                  Adjust simulation parameters
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Tabs defaultValue="incline" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="incline">Incline</TabsTrigger>
+                    <TabsTrigger value="lever">Lever</TabsTrigger>
+                    <TabsTrigger value="pendulum">Pendulum</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="incline" className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Mass: {mass[0]}kg
+                      </label>
+                      <Slider
+                        value={mass}
+                        onValueChange={setMass}
+                        max={10}
+                        min={0.1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Height: {height[0]}m
+                      </label>
+                      <Slider
+                        value={height}
+                        onValueChange={setHeight}
+                        max={5}
+                        min={1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Angle: {angle[0]}°
+                      </label>
+                      <Slider
+                        value={angle}
+                        onValueChange={setAngle}
+                        max={60}
+                        min={0}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="lever" className="space-y-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        Lever simulation ready
+                      </p>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="pendulum" className="space-y-4">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        Pendulum simulation coming soon
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Information</CardTitle>
+                <CardDescription>
+                  Physics concepts demonstrated
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Kinetic Energy</h4>
+                  <p className="text-sm text-muted-foreground">
+                    KE = ½mv²
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Energy of motion, proportional to mass and the square of velocity.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Potential Energy</h4>
+                  <p className="text-sm text-muted-foreground">
+                    PE = mgh
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Gravitational potential energy, proportional to mass, gravity, and height.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Work-Energy Theorem</h4>
+                  <p className="text-sm text-muted-foreground">
+                    W = ΔKE
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Work done on an object equals its change in kinetic energy.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Helper hook for frame updates
+function useFrame(callback: (state: any, delta: number) => void) {
+  const requestRef = useRef<number>()
+  const previousTimeRef = useRef<number>()
+  
+  useEffect(() => {
+    const animate = (time: number) => {
+      if (previousTimeRef.current !== undefined) {
+        const deltaTime = (time - previousTimeRef.current) / 1000
+        callback({ time }, deltaTime)
+      }
+      previousTimeRef.current = time
+      requestRef.current = requestAnimationFrame(animate)
+    }
+    
+    requestRef.current = requestAnimationFrame(animate)
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+      }
+    }
+  }, [callback])
+}
