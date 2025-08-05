@@ -1,17 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Box, Sphere, Plane, Text, Cylinder } from '@react-three/drei'
-import { Physics, useBox, usePlane, useSphere } from '@react-three/cannon'
-import * as THREE from 'three'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Canvas } from '@react-three/fiber'
+import { Physics, useBox, useSphere } from '@react-three/cannon'
+import { OrbitControls, Text, Sphere, Box } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Play, Pause, RotateCcw, Scale, Droplets } from 'lucide-react'
+import { Play, Pause, RotateCcw, Scale } from 'lucide-react'
+import * as THREE from 'three'
 
 // Water container
 function WaterContainer() {
@@ -23,4 +20,274 @@ function WaterContainer() {
   
   return (
     <group>
-      {/* Water container walls */}\n      <Box ref={ref} args={[8, 6, 8]}>\n        <meshStandardMaterial color=\"#87CEEB\" transparent opacity={0.3} wireframe />\n      </Box>\n      \n      {/* Water level */}\n      <Box position={[0, -1, 0]} args={[7.8, 4, 7.8]}>\n        <meshStandardMaterial color=\"#4682B4\" transparent opacity={0.6} />\n      </Box>\n      \n      {/* Container bottom */}\n      <Box position={[0, -3, 0]} args={[8, 0.2, 8]}>\n        <meshStandardMaterial color=\"#8B4513\" />\n      </Box>\n    </group>\n  )\n}\n\n// Floating object\nfunction FloatingObject({ \n  position, \n  mass, \n  density, \n  isPlaying \n}: { \n  position: [number, number, number]; \n  mass: number; \n  density: number; \n  isPlaying: boolean \n}) {\n  const [ref, api] = useSphere(() => ({ \n    mass, \n    position, \n    args: [0.5],\n    linearDamping: 0.5\n  }))\n  \n  const [submerged, setSubmerged] = useState(false)\n  const [buoyantForce, setBuoyantForce] = useState(0)\n  \n  useFrame(() => {\n    if (ref.current) {\n      const y = ref.current.position.y\n      const waterLevel = 1\n      \n      // Calculate if object is submerged\n      const isSubmerged = y < waterLevel\n      setSubmerged(isSubmerged)\n      \n      // Calculate buoyant force (simplified)\n      if (isSubmerged) {\n        const waterDensity = 1000 // kg/m³\n        const volume = (4/3) * Math.PI * Math.pow(0.5, 3) // sphere volume\n        const submergedVolume = volume * Math.min(1, (waterLevel - y + 0.5) / 1)\n        const force = waterDensity * 9.81 * submergedVolume\n        setBuoyantForce(force)\n        \n        // Apply buoyant force\n        api.applyForce([0, force, 0], [0, 0, 0])\n      } else {\n        setBuoyantForce(0)\n      }\n    }\n  })\n\n  return (\n    <>\n      <Sphere ref={ref} args={[0.5]}>\n        <meshStandardMaterial \n          color={density < 1000 ? \"#FF6B6B\" : density > 1000 ? \"#4ECDC4\" : \"#45B7D1\"} \n        />\n      </Sphere>\n      {submerged && (\n        <Text \n          position={[position[0] + 1, position[1], position[2]]} \n          fontSize={0.3} \n          color=\"black\"\n        >\n          Fb: {buoyantForce.toFixed(1)}N\n        </Text>\n      )}\n    </>\n  )\n}\n\n// Pressure visualization\nfunction PressureIndicator({ depth }: { depth: number }) {\n  const pressure = 1000 * 9.81 * depth // P = ρgh\n  const color = new THREE.Color().setHSL(0.6 - pressure / 50000, 0.8, 0.5)\n  \n  return (\n    <group position={[3, -depth, 0]}>\n      <Box args={[0.5, 0.1, 0.5]}>\n        <meshStandardMaterial color={color} />\n      </Box>\n      <Text position={[0.7, 0, 0]} fontSize={0.2} color=\"black\">\n        {pressure.toFixed(0)} Pa\n      </Text>\n    </group>\n  )\n}\n\n// Main scene component\nfunction BuoyancyScene({ \n  objectDensity, \n  fluidDensity, \n  isPlaying \n}: { \n  objectDensity: number; \n  fluidDensity: number; \n  isPlaying: boolean \n}) {\n  const [data, setData] = useState<Array<{ time: number; depth: number; pressure: number; buoyantForce: number }>>([])\n  const startTime = useRef(Date.now())\n  \n  useFrame(() => {\n    if (isPlaying) {\n      const time = (Date.now() - startTime.current) / 1000\n      const depth = Math.max(0, Math.sin(time * 0.5) * 2 + 1)\n      const pressure = fluidDensity * 9.81 * depth\n      const buoyantForce = fluidDensity * 9.81 * (4/3) * Math.PI * Math.pow(0.5, 3) * Math.min(1, depth / 1)\n      \n      setData(prev => {\n        const newData = [...prev, { time, depth, pressure, buoyantForce }]\n        return newData.slice(-100)\n      })\n    }\n  })\n\n  return (\n    <>\n      <ambientLight intensity={0.5} />\n      <pointLight position={[10, 10, 10]} />\n      <Physics gravity={[0, -9.81, 0]}>\n        <WaterContainer />\n        <FloatingObject \n          position={[0, 3, 0]} \n          mass={objectDensity * (4/3) * Math.PI * Math.pow(0.5, 3)} \n          density={objectDensity} \n          isPlaying={isPlaying} \n        />\n      </Physics>\n      <OrbitControls />\n      \n      {/* Pressure indicators */}\n      <PressureIndicator depth={0.5} />\n      <PressureIndicator depth={1.5} />\n      <PressureIndicator depth={2.5} />\n      \n      <Text position={[0, 4, 0]} fontSize={0.5} color=\"black\">\n        Archimedes' Principle: Fb = ρfluid × V × g\n      </Text>\n    </>\n  )\n}\n\nexport default function PressureBuoyancyPage() {\n  const [objectDensity, setObjectDensity] = useState([800])\n  const [fluidDensity, setFluidDensity] = useState([1000])\n  const [isPlaying, setIsPlaying] = useState(false)\n  const [simulationData, setSimulationData] = useState<Array<{ time: number; depth: number; pressure: number; buoyantForce: number }>>([])\n\n  const handleReset = () => {\n    setIsPlaying(false)\n    setSimulationData([])\n  }\n\n  const calculateBuoyancy = () => {\n    const volume = (4/3) * Math.PI * Math.pow(0.5, 3) // sphere volume in m³\n    const weight = objectDensity[0] * volume * 9.81\n    const maxBuoyantForce = fluidDensity[0] * volume * 9.81\n    const willFloat = objectDensity[0] < fluidDensity[0]\n    \n    return {\n      weight: weight.toFixed(2),\n      maxBuoyantForce: maxBuoyantForce.toFixed(2),\n      willFloat,\n      submergedFraction: willFloat ? (objectDensity[0] / fluidDensity[0] * 100).toFixed(1) : '100'\n    }\n  }\n\n  const buoyancy = calculateBuoyancy()\n\n  return (\n    <div className=\"container mx-auto px-4 py-8\">\n      <div className=\"mb-8\">\n        <h1 className=\"text-4xl font-bold mb-4\">Pressure & Buoyancy</h1>\n        <p className=\"text-lg text-muted-foreground mb-6\">\n          Explore Archimedes' Principle and fluid pressure through interactive simulations\n        </p>\n      </div>\n\n      <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n        {/* 3D Scene */}\n        <div className=\"lg:col-span-2\">\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                <Droplets className=\"h-5 w-5\" />\n                3D Buoyancy Simulation\n              </CardTitle>\n              <CardDescription>\n                Interactive visualization of buoyancy and fluid pressure\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              <div className=\"h-96 rounded-lg overflow-hidden bg-gradient-to-b from-sky-200 to-blue-400\">\n                <Canvas camera={{ position: [8, 5, 8], fov: 75 }}>\n                  <BuoyancyScene \n                    objectDensity={objectDensity[0]} \n                    fluidDensity={fluidDensity[0]} \n                    isPlaying={isPlaying} \n                  />\n                </Canvas>\n              </div>\n              <div className=\"flex gap-2 mt-4\">\n                <Button \n                  onClick={() => setIsPlaying(!isPlaying)}\n                  variant={isPlaying ? \"secondary\" : \"default\"}\n                >\n                  {isPlaying ? <Pause className=\"h-4 w-4 mr-2\" /> : <Play className=\"h-4 w-4 mr-2\" />}\n                  {isPlaying ? 'Pause' : 'Play'}\n                </Button>\n                <Button onClick={handleReset} variant=\"outline\">\n                  <RotateCcw className=\"h-4 w-4 mr-2\" />\n                  Reset\n                </Button>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n\n        {/* Controls */}\n        <div className=\"space-y-6\">\n          <Card>\n            <CardHeader>\n              <CardTitle>Simulation Controls</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-6\">\n              <div className=\"space-y-2\">\n                <Label>Object Density (kg/m³): {objectDensity[0]}</Label>\n                <Slider\n                  value={objectDensity}\n                  onValueChange={setObjectDensity}\n                  max={2000}\n                  min={100}\n                  step={50}\n                  className=\"w-full\"\n                />\n                <div className=\"text-xs text-muted-foreground\">\n                  {objectDensity[0] < 1000 ? 'Will float' : objectDensity[0] > 1000 ? 'Will sink' : 'Neutral buoyancy'}\n                </div>\n              </div>\n              \n              <div className=\"space-y-2\">\n                <Label>Fluid Density (kg/m³): {fluidDensity[0]}</Label>\n                <Slider\n                  value={fluidDensity}\n                  onValueChange={setFluidDensity}\n                  max={2000}\n                  min={500}\n                  step={50}\n                  className=\"w-full\"\n                />\n                <div className=\"text-xs text-muted-foreground\">\n                  Water: 1000 kg/m³, Oil: ~900 kg/m³, Honey: ~1400 kg/m³\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardHeader>\n              <CardTitle>Buoyancy Calculations</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              <div className=\"grid grid-cols-2 gap-4 text-sm\">\n                <div>\n                  <div className=\"font-medium\">Object Weight</div>\n                  <div className=\"text-2xl font-bold text-blue-600\">{buoyancy.weight} N</div>\n                </div>\n                <div>\n                  <div className=\"font-medium\">Max Buoyant Force</div>\n                  <div className=\"text-2xl font-bold text-green-600\">{buoyancy.maxBuoyantForce} N</div>\n                </div>\n                <div className=\"col-span-2\">\n                  <div className=\"font-medium\">Prediction</div>\n                  <div className={`text-lg font-bold ${buoyancy.willFloat ? 'text-green-600' : 'text-red-600'}`}>\n                    {buoyancy.willFloat ? 'Will Float' : 'Will Sink'}\n                  </div>\n                  <div className=\"text-sm text-muted-foreground\">\n                    Submerged: {buoyancy.submergedFraction}%\n                  </div>\n                </div>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n      </div>\n\n      {/* Data Visualization */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>Pressure & Buoyancy Data</CardTitle>\n          <CardDescription>\n            Real-time graphs of depth, pressure, and buoyant force\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <Tabs defaultValue=\"pressure\" className=\"w-full\">\n            <TabsList className=\"grid w-full grid-cols-3\">\n              <TabsTrigger value=\"pressure\">Pressure</TabsTrigger>\n              <TabsTrigger value=\"buoyant\">Buoyant Force</TabsTrigger>\n              <TabsTrigger value=\"depth\">Depth</TabsTrigger>\n            </TabsList>\n            <TabsContent value=\"pressure\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: 'Pressure (Pa)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"pressure\" stroke=\"#8884d8\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"buoyant\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: 'Buoyant Force (N)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"buoyantForce\" stroke=\"#82ca9d\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"depth\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: 'Depth (m)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"depth\" stroke=\"#ffc658\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n          </Tabs>\n        </CardContent>\n      </Card>\n\n      {/* Educational Content */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>Archimedes' Principle</CardTitle>\n        </CardHeader>\n        <CardContent className=\"space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-4\">\n            <div className=\"p-4 border rounded-lg\">\n              <h3 className=\"font-semibold mb-2\">Principle Statement</h3>\n              <p className=\"text-sm text-muted-foreground mb-3\">\n                The buoyant force on an object submerged in a fluid is equal to the weight \n                of the fluid displaced by the object.\n              </p>\n              <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                Fb = ρfluid × Vdisplaced × g\n              </div>\n            </div>\n            <div className=\"p-4 border rounded-lg\">\n              <h3 className=\"font-semibold mb-2\">Applications</h3>\n              <ul className=\"text-sm text-muted-foreground space-y-1\">\n                <li>• Ship design and stability</li>\n                <li>• Hot air balloons</li>\n                <li>• Submarines and diving</li>\n                <li>• Hydrometers for density measurement</li>\n              </ul>\n            </div>\n          </div>\n          \n          <div className=\"p-4 border rounded-lg\">\n            <h3 className=\"font-semibold mb-2\">Pressure in Fluids</h3>\n            <p className=\"text-sm text-muted-foreground mb-3\">\n              Pressure in a fluid increases with depth due to the weight of the fluid above.\n            </p>\n            <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n              P = ρ × g × h<br />\n              where P = pressure, ρ = fluid density, g = gravity, h = depth\n            </div>\n          </div>\n        </CardContent>\n      </Card>\n    </div>\n  )\n}
+      {/* Water container walls */}
+      <Box ref={ref} args={[8, 6, 8]}>
+        <meshStandardMaterial color="#87CEEB" transparent opacity={0.3} wireframe />
+      </Box>
+      
+      {/* Water level */}
+      <Box position={[0, -1, 0]} args={[7.8, 4, 7.8]}>
+        <meshStandardMaterial color="#4682B4" transparent opacity={0.6} />
+      </Box>
+      
+      {/* Container bottom */}
+      <Box position={[0, -3, 0]} args={[8, 0.2, 8]}>
+        <meshStandardMaterial color="#8B4513" />
+      </Box>
+    </group>
+  )
+}
+
+// Floating object
+function FloatingObject({ 
+  position, 
+  mass, 
+  density, 
+  isPlaying 
+}: { 
+  position: [number, number, number]; 
+  mass: number; 
+  density: number; 
+  isPlaying: boolean 
+}) {
+  const [ref, api] = useSphere(() => ({ 
+    mass, 
+    position, 
+    args: [0.5],
+    linearDamping: 0.5
+  }))
+  
+  const [submerged, setSubmerged] = useState(false)
+  const [buoyantForce, setBuoyantForce] = useState(0)
+  
+  useFrame(() => {
+    if (ref.current) {
+      const y = ref.current.position.y
+      const waterLevel = 1
+      
+      // Calculate if object is submerged
+      const isSubmerged = y < waterLevel
+      setSubmerged(isSubmerged)
+      
+      // Calculate buoyant force (simplified)
+      if (isSubmerged) {
+        const waterDensity = 1000 // kg/m³
+        const volume = (4/3) * Math.PI * Math.pow(0.5, 3) // sphere volume
+        const submergedVolume = volume * Math.min(1, (waterLevel - y + 0.5) / 1)
+        const force = waterDensity * 9.81 * submergedVolume
+        setBuoyantForce(force)
+        
+        // Apply buoyant force
+        api.applyForce([0, force, 0], [0, 0, 0])
+      } else {
+        setBuoyantForce(0)
+      }
+    }
+  })
+
+  return (
+    <>
+      <Sphere ref={ref} args={[0.5]}>
+        <meshStandardMaterial 
+          color={density < 1000 ? "#FF6B6B" : density > 1000 ? "#4ECDC4" : "#45B7D1"} 
+        />
+      </Sphere>
+      {submerged && (
+        <Text 
+          position={[position[0] + 1, position[1], position[2]]} 
+          fontSize={0.3} 
+          color="black"
+        >
+          Fb: {buoyantForce.toFixed(1)}N
+        </Text>
+      )}
+    </>
+  )
+}
+
+// Main component
+export default function PressureBuoyancyPage() {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [objectDensity, setObjectDensity] = useState([800])
+  const [fluidDensity, setFluidDensity] = useState([1000])
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">Pressure & Buoyancy</h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Explore Archimedes' Principle through fluid simulations and buoyancy experiments.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Scale className="h-5 w-5" />
+                  3D Simulation
+                </CardTitle>
+                <CardDescription>
+                  Interactive pressure and buoyancy simulation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 rounded-lg overflow-hidden">
+                  <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    <Physics gravity={[0, -9.81, 0]}>
+                      <WaterContainer />
+                      <FloatingObject 
+                        position={[0, 3, 0]} 
+                        mass={objectDensity[0] * (4/3) * Math.PI * Math.pow(0.5, 3)} 
+                        density={objectDensity[0]} 
+                        isPlaying={isPlaying} 
+                      />
+                    </Physics>
+                    <OrbitControls />
+                  </Canvas>
+                </div>
+                
+                <div className="flex justify-center gap-4 mt-4">
+                  <Button 
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="gap-2"
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIsPlaying(false)
+                      setObjectDensity([800])
+                      setFluidDensity([1000])
+                    }}
+                    className="gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Controls</CardTitle>
+                <CardDescription>
+                  Adjust simulation parameters
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Object Density: {objectDensity[0]} kg/m³
+                  </label>
+                  <Slider
+                    value={objectDensity}
+                    onValueChange={setObjectDensity}
+                    max={2000}
+                    min={100}
+                    step={10}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {objectDensity[0] < 1000 ? "Less dense than water - will float" : 
+                     objectDensity[0] > 1000 ? "More dense than water - will sink" : 
+                     "Same density as water - neutrally buoyant"}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Fluid Density: {fluidDensity[0]} kg/m³
+                  </label>
+                  <Slider
+                    value={fluidDensity}
+                    onValueChange={setFluidDensity}
+                    max={2000}
+                    min={100}
+                    step={10}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {fluidDensity[0] === 1000 ? "Water" : 
+                     fluidDensity[0] < 1000 ? "Lighter than water" : 
+                     "Denser than water"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Information</CardTitle>
+                <CardDescription>
+                  Physics concepts demonstrated
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Archimedes' Principle</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Fb = ρ × V × g
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The buoyant force equals the weight of the displaced fluid.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Hydrostatic Pressure</h4>
+                  <p className="text-sm text-muted-foreground">
+                    P = ρ × g × h
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Pressure increases with depth in a fluid.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Buoyancy</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Objects float when buoyant force exceeds weight.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Helper hook for frame updates
+function useFrame(callback: (state: any, delta: number) => void) {
+  const requestRef = useRef<number>()
+  const previousTimeRef = useRef<number>()
+  
+  useEffect(() => {
+    const animate = (time: number) => {
+      if (previousTimeRef.current !== undefined) {
+        const deltaTime = (time - previousTimeRef.current) / 1000
+        callback({ time }, deltaTime)
+      }
+      previousTimeRef.current = time
+      requestRef.current = requestAnimationFrame(animate)
+    }
+    
+    requestRef.current = requestAnimationFrame(animate)
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+      }
+    }
+  }, [callback])
+}
