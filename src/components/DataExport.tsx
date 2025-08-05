@@ -18,7 +18,8 @@ interface DataExportProps {
 
 export function DataExport({ data, title, description }: DataExportProps) {
   const exportToCSV = () => {
-    if (data.length === 0) {\      toast.error('No data to export')
+    if (data.length === 0) {
+      toast.error('No data to export')
       return
     }
 
