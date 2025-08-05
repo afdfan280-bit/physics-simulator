@@ -12,13 +12,13 @@ const navigationItems = [
     title: 'Force & Motion',
     href: '/force-motion',
     icon: Activity,
-    description: 'Newton\\'s Laws of Motion'
+    description: 'Newton\'s Laws of Motion'
   },
   {
     title: 'Pressure & Buoyancy',
     href: '/pressure-buoyancy',
     icon: Scale,
-    description: 'Archimedes\\' Principle'
+    description: 'Archimedes\' Principle'
   },
   {
     title: 'Energy & Work',
