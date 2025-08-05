@@ -1,18 +1,288 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Box, Sphere, Plane, Text, Line, Cylinder } from '@react-three/drei'
-import * as THREE from 'three'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Canvas } from '@react-three/fiber'
+import { Physics, useBox, useSphere, usePlane } from '@react-three/cannon'
+import { OrbitControls, Text, Line, Sphere, Box, Cylinder } from '@react-three/drei'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Play, Pause, RotateCcw, Zap, Battery } from 'lucide-react'
+import { Play, Pause, RotateCcw, Zap } from 'lucide-react'
+import * as THREE from 'three'
 
 // Electric charge component
 function ElectricCharge({ position, charge, isPlaying }: { position: [number, number, number]; charge: number; isPlaying: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null)
-  \n  useFrame(() => {\n    if (meshRef.current && isPlaying) {\n      // Animate charge pulsing\n      const scale = 1 + Math.sin(Date.now() * 0.003) * 0.1\n      meshRef.current.scale.set(scale, scale, scale)\n    }\n  })\n\n  return (\n    <Sphere ref={meshRef} position={position} args={[0.3]}>\n      <meshStandardMaterial \n        color={charge > 0 ? \"#FF4444\" : \"#4444FF\"} \n        emissive={charge > 0 ? \"#FF4444\" : \"#4444FF\"}\n        emissiveIntensity={0.3}\n      />\n    </Sphere>\n  )\n}\n\n// Electric field lines\nfunction ElectricFieldLine({ start, direction, length, steps = 20 }: { \n  start: [number, number, number]; \n  direction: [number, number, number]; \n  length: number; \n  steps?: number \n}) {\n  const points = []\n  \n  for (let i = 0; i <= steps; i++) {\n    const t = i / steps\n    const x = start[0] + direction[0] * length * t\n    const y = start[1] + direction[1] * length * t\n    const z = start[2] + direction[2] * length * t\n    points.push(new THREE.Vector3(x, y, z))\n  }\n\n  return (\n    <Line\n      points={points}\n      color=\"#FFD700\"\n      lineWidth={1}\n      transparent\n      opacity={0.6}\n    />\n  )\n}\n\n// Magnetic field component\nfunction MagneticField({ position, strength, isPlaying }: { position: [number, number, number]; strength: number; isPlaying: boolean }) {\n  const meshRef = useRef<THREE.Mesh>(null)\n  \n  useFrame(() => {\n    if (meshRef.current && isPlaying) {\n      meshRef.current.rotation.y += 0.02\n    }\n  })\n\n  return (\n    <group position={position}>\n      <Cylinder ref={meshRef} args={[0.5, 0.5, 0.2, 32]} rotation={[Math.PI/2, 0, 0]}>\n        <meshStandardMaterial color=\"#8B008B\" />\n      </Cylinder>\n      <Text position={[0, 0.8, 0]} fontSize={0.3} color=\"black\">\n        N\n      </Text>\n      <Text position={[0, -0.8, 0]} fontSize={0.3} color=\"black\">\n        S\n      </Text>\n    </group>\n  )\n}\n\n// Circuit component\nfunction CircuitComponent({ \n  voltage, \n  resistance, \n  current,\n  isPlaying\n}: { \n  voltage: number; \n  resistance: number; \n  current: number;\n  isPlaying: boolean\n}) {\n  const [electronPositions, setElectronPositions] = useState<Array<{x: number, y: number, z: number}>>([])\n  \n  useEffect(() => {\n    if (isPlaying) {\n      // Create electrons along the circuit path\n      const electrons = []\n      for (let i = 0; i < 8; i++) {\n        const angle = (i / 8) * Math.PI * 2\n        electrons.push({\n          x: Math.cos(angle) * 2,\n          y: Math.sin(angle) * 2,\n          z: 0\n        })\n      }\n      setElectronPositions(electrons)\n    }\n  }, [isPlaying])\n  \n  useFrame(() => {\n    if (isPlaying) {\n      // Animate electrons moving around circuit\n      setElectronPositions(prev => \n        prev.map(electron => {\n          const angle = Math.atan2(electron.y, electron.x) + 0.05\n          return {\n            x: Math.cos(angle) * 2,\n            y: Math.sin(angle) * 2,\n            z: 0\n          }\n        })\n      )\n    }\n  })\n\n  return (\n    <group>\n      {/* Circuit wires (circular) */}\n      <Line\n        points={Array.from({length: 64}, (_, i) => {\n          const angle = (i / 64) * Math.PI * 2\n          return new THREE.Vector3(Math.cos(angle) * 2, Math.sin(angle) * 2, 0)\n        })}\n        color=\"#333333\"\n        lineWidth={3}\n      />\n      \n      {/* Battery */}\n      <Box position={[2.5, 0, 0]} args={[0.3, 0.8, 0.2]}>\n        <meshStandardMaterial color=\"#228B22\" />\n      </Box>\n      <Text position={[2.8, 0, 0]} fontSize={0.3} color=\"black\">\n        {voltage}V\n      </Text>\n      \n      {/* Resistor */}\n      <Box position={[-2.5, 0, 0]} args={[0.6, 0.3, 0.2]}>\n        <meshStandardMaterial color=\"#8B4513\" />\n      </Box>\n      <Text position={[-2.8, 0, 0]} fontSize={0.3} color=\"black\">\n        {resistance}Ω\n      </Text>\n      \n      {/* Electrons */}\n      {electronPositions.map((pos, i) => (\n        <Sphere key={i} position={[pos.x, pos.y, pos.z]} args={[0.05]}>\n          <meshStandardMaterial color=\"#00BFFF\" emissive=\"#00BFFF\" emissiveIntensity={0.5} />\n        </Sphere>\n      ))}\n      \n      {/* Current flow indicator */}\n      {isPlaying && (\n        <Text position={[0, 3, 0]} fontSize={0.4} color=\"black\">\n          I = {current.toFixed(2)}A\n        </Text>\n      )}\n    </group>\n  )\n}\n\n// Main scene component\nfunction ElectromagnetismScene({ \n  charge1, \n  charge2, \n  voltage, \n  resistance, \n  isPlaying,\n  sceneType\n}: { \n  charge1: number; \n  charge2: number; \n  voltage: number; \n  resistance: number; \n  isPlaying: boolean;\n  sceneType: 'electric' | 'magnetic' | 'circuit'\n}) {\n  const [data, setData] = useState<Array<{ time: number; field: number; force: number; current: number }>>([])\n  const startTime = useRef(Date.now())\n  \n  // Calculate current using Ohm's law\n  const current = voltage / resistance\n  \n  useFrame(() => {\n    if (isPlaying) {\n      const time = (Date.now() - startTime.current) / 1000\n      \n      let field, force\n      if (sceneType === 'electric') {\n        // Simplified electric field calculation\n        field = Math.abs(charge1 * charge2) / (4 * Math.PI * 8.99e9 * 4) // Coulomb's law simplified\n        force = field * Math.abs(charge2)\n      } else if (sceneType === 'magnetic') {\n        // Simplified magnetic field\n        field = Math.sin(time * 2) * 0.5 + 0.5\n        force = field * 0.1\n      } else {\n        // Circuit power\n        field = voltage * current\n        force = current * current * resistance\n      }\n      \n      setData(prev => {\n        const newData = [...prev, { time, field, force, current }]\n        return newData.slice(-100)\n      })\n    }\n  })\n\n  return (\n    <>\n      <ambientLight intensity={0.5} />\n      <pointLight position={[10, 10, 10]} />\n      \n      {sceneType === 'electric' && (\n        <>\n          <ElectricCharge position={[-2, 0, 0]} charge={charge1} isPlaying={isPlaying} />\n          <ElectricCharge position={[2, 0, 0]} charge={charge2} isPlaying={isPlaying} />\n          \n          {/* Electric field lines */}\n          {charge1 > 0 && (\n            <>\n              <ElectricFieldLine start={[-2, 0, 0]} direction={[1, 0, 0]} length={3} />\n              <ElectricFieldLine start={[-2, 0, 0]} direction={[0.7, 0.7, 0]} length={3} />\n              <ElectricFieldLine start={[-2, 0, 0]} direction={[0.7, -0.7, 0]} length={3} />\n            </>\n          )}\n          \n          {charge2 > 0 && (\n            <>\n              <ElectricFieldLine start={[2, 0, 0]} direction={[-1, 0, 0]} length={3} />\n              <ElectricFieldLine start={[2, 0, 0]} direction={[-0.7, 0.7, 0]} length={3} />\n              <ElectricFieldLine start={[2, 0, 0]} direction={[-0.7, -0.7, 0]} length={3} />\n            </>\n          )}\n          \n          <Text position={[0, 3, 0]} fontSize={0.4} color=\"black\">\n            Coulomb's Law: F = k(q₁q₂)/r²\n          </Text>\n        </>\n      )}\n      \n      {sceneType === 'magnetic' && (\n        <>\n          <MagneticField position={[-2, 0, 0]} strength={1} isPlaying={isPlaying} />\n          <MagneticField position={[2, 0, 0]} strength={-1} isPlaying={isPlaying} />\n          \n          {/* Magnetic field lines */}\n          <Line\n            points={[\n              new THREE.Vector3(-2, 0, 0),\n              new THREE.Vector3(0, 1, 0),\n              new THREE.Vector3(2, 0, 0),\n              new THREE.Vector3(0, -1, 0),\n              new THREE.Vector3(-2, 0, 0)\n            ]}\n            color=\"#FF1493\"\n            lineWidth={2}\n          />\n          \n          <Text position={[0, 3, 0]} fontSize={0.4} color=\"black\">\n            Magnetic Field Interaction\n          </Text>\n        </>\n      )}\n      \n      {sceneType === 'circuit' && (\n        <CircuitComponent \n          voltage={voltage} \n          resistance={resistance} \n          current={current}\n          isPlaying={isPlaying}\n        />\n      )}\n      \n      <OrbitControls />\n    </>\n  )\n}\n\nexport default function ElectricityMagnetismPage() {\n  const [charge1, setCharge1] = useState([1])\n  const [charge2, setCharge2] = useState([-1])\n  const [voltage, setVoltage] = useState([12])\n  const [resistance, setResistance] = useState([4])\n  const [isPlaying, setIsPlaying] = useState(false)\n  const [simulationData, setSimulationData] = useState<Array<{ time: number; field: number; force: number; current: number }>>([])\n  const [sceneType, setSceneType] = useState<'electric' | 'magnetic' | 'circuit'>('circuit')\n\n  const handleReset = () => {\n    setIsPlaying(false)\n    setSimulationData([])\n  }\n\n  const calculateElectromagnetism = () => {\n    const current = voltage[0] / resistance[0]\n    const power = voltage[0] * current\n    const energy = power * 1 // Energy after 1 second\n    \n    // Electric force calculation (simplified)\n    const k = 8.99e9 // Coulomb's constant\n    const distance = 4 // meters\n    const electricForce = k * Math.abs(charge1[0] * charge2[0]) / (distance * distance)\n    \n    return {\n      current: current.toFixed(2),\n      power: power.toFixed(2),\n      energy: energy.toFixed(2),\n      electricForce: electricForce.toExponential(2),\n      isAttractive: charge1[0] * charge2[0] < 0\n    }\n  }\n\n  const em = calculateElectromagnetism()\n\n  return (\n    <div className=\"container mx-auto px-4 py-8\">\n      <div className=\"mb-8\">\n        <h1 className=\"text-4xl font-bold mb-4\">Electricity & Magnetism</h1>\n        <p className=\"text-lg text-muted-foreground mb-6\">\n          Explore electric fields, magnetic forces, and circuit analysis\n        </p>\n      </div>\n\n      <div className=\"mb-6\">\n        <div className=\"flex gap-2\">\n          <Button \n            variant={sceneType === 'electric' ? 'default' : 'outline'}\n            onClick={() => setSceneType('electric')}\n          >\n            <Zap className=\"h-4 w-4 mr-2\" />\n            Electric Field\n          </Button>\n          <Button \n            variant={sceneType === 'magnetic' ? 'default' : 'outline'}\n            onClick={() => setSceneType('magnetic')}\n          >\n            <Zap className=\"h-4 w-4 mr-2\" />\n            Magnetic Field\n          </Button>\n          <Button \n            variant={sceneType === 'circuit' ? 'default' : 'outline'}\n            onClick={() => setSceneType('circuit')}\n          >\n            <Battery className=\"h-4 w-4 mr-2\" />\n            Circuit\n          </Button>\n        </div>\n      </div>\n\n      <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-6\">\n        {/* 3D Scene */}\n        <div className=\"lg:col-span-2\">\n          <Card>\n            <CardHeader>\n              <CardTitle className=\"flex items-center gap-2\">\n                {sceneType === 'circuit' ? <Battery className=\"h-5 w-5\" /> : <Zap className=\"h-5 w-5\" />}\n                3D {sceneType === 'circuit' ? 'Circuit' : sceneType === 'electric' ? 'Electric Field' : 'Magnetic Field'} Simulation\n              </CardTitle>\n              <CardDescription>\n                Interactive visualization of {sceneType === 'circuit' ? 'electrical circuits and current flow' : \n                  sceneType === 'electric' ? 'electric charges and field lines' : 'magnetic field interactions'}\n              </CardDescription>\n            </CardHeader>\n            <CardContent>\n              <div className=\"h-96 rounded-lg overflow-hidden bg-gradient-to-b from-gray-100 to-gray-200\">\n                <Canvas camera={{ position: [8, 5, 8], fov: 75 }}>\n                  <ElectromagnetismScene \n                    charge1={charge1[0]} \n                    charge2={charge2[0]} \n                    voltage={voltage[0]} \n                    resistance={resistance[0]} \n                    isPlaying={isPlaying}\n                    sceneType={sceneType}\n                  />\n                </Canvas>\n              </div>\n              <div className=\"flex gap-2 mt-4\">\n                <Button \n                  onClick={() => setIsPlaying(!isPlaying)}\n                  variant={isPlaying ? \"secondary\" : \"default\"}\n                >\n                  {isPlaying ? <Pause className=\"h-4 w-4 mr-2\" /> : <Play className=\"h-4 w-4 mr-2\" />}\n                  {isPlaying ? 'Pause' : 'Play'}\n                </Button>\n                <Button onClick={handleReset} variant=\"outline\">\n                  <RotateCcw className=\"h-4 w-4 mr-2\" />\n                  Reset\n                </Button>\n              </div>\n            </CardContent>\n          </Card>\n        </div>\n\n        {/* Controls */}\n        <div className=\"space-y-6\">\n          <Card>\n            <CardHeader>\n              <CardTitle>Simulation Controls</CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-6\">\n              {sceneType === 'electric' && (\n                <>\n                  <div className=\"space-y-2\">\n                    <Label>Charge 1 (C): {charge1[0]}</Label>\n                    <Slider\n                      value={charge1}\n                      onValueChange={setCharge1}\n                      max={5}\n                      min={-5}\n                      step={0.5}\n                      className=\"w-full\"\n                    />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Charge 2 (C): {charge2[0]}</Label>\n                    <Slider\n                      value={charge2}\n                      onValueChange={setCharge2}\n                      max={5}\n                      min={-5}\n                      step={0.5}\n                      className=\"w-full\"\n                    />\n                  </div>\n                </>\n              )}\n              \n              {sceneType === 'circuit' && (\n                <>\n                  <div className=\"space-y-2\">\n                    <Label>Voltage (V): {voltage[0]}</Label>\n                    <Slider\n                      value={voltage}\n                      onValueChange={setVoltage}\n                      max={24}\n                      min={1}\n                      step={1}\n                      className=\"w-full\"\n                    />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <Label>Resistance (Ω): {resistance[0]}</Label>\n                    <Slider\n                      value={resistance}\n                      onValueChange={setResistance}\n                      max={20}\n                      min={1}\n                      step={0.5}\n                      className=\"w-full\"\n                    />\n                  </div>\n                </>\n              )}\n            </CardContent>\n          </Card>\n\n          <Card>\n            <CardHeader>\n              <CardTitle>\n                {sceneType === 'circuit' ? 'Circuit Analysis' : \n                 sceneType === 'electric' ? 'Electric Force' : 'Magnetic Properties'}\n              </CardTitle>\n            </CardHeader>\n            <CardContent className=\"space-y-4\">\n              {sceneType === 'circuit' ? (\n                <div className=\"grid grid-cols-1 gap-4 text-sm\">\n                  <div>\n                    <div className=\"font-medium\">Current (Ohm's Law)</div>\n                    <div className=\"text-2xl font-bold text-blue-600\">{em.current} A</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Power</div>\n                    <div className=\"text-2xl font-bold text-green-600\">{em.power} W</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Energy (1s)</div>\n                    <div className=\"text-2xl font-bold text-purple-600\">{em.energy} J</div>\n                  </div>\n                </div>\n              ) : sceneType === 'electric' ? (\n                <div className=\"grid grid-cols-1 gap-4 text-sm\">\n                  <div>\n                    <div className=\"font-medium\">Electric Force</div>\n                    <div className=\"text-xl font-bold text-red-600\">{em.electricForce} N</div>\n                  </div>\n                  <div>\n                    <div className=\"font-medium\">Interaction Type</div>\n                    <div className={`text-lg font-bold ${em.isAttractive ? 'text-green-600' : 'text-red-600'}`}>\n                      {em.isAttractive ? 'Attractive' : 'Repulsive'}\n                    </div>\n                  </div>\n                </div>\n              ) : (\n                <div className=\"text-center text-muted-foreground\">\n                  Magnetic field strength and interactions\n                </div>\n              )}\n            </CardContent>\n          </Card>\n        </div>\n      </div>\n\n      {/* Data Visualization */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>\n            {sceneType === 'circuit' ? 'Circuit Data' : \n             sceneType === 'electric' ? 'Electric Field Data' : 'Magnetic Field Data'}\n          </CardTitle>\n          <CardDescription>\n            Real-time visualization of {sceneType === 'circuit' ? 'electrical properties' : 'field measurements'}\n          </CardDescription>\n        </CardHeader>\n        <CardContent>\n          <Tabs defaultValue=\"field\" className=\"w-full\">\n            <TabsList className=\"grid w-full grid-cols-3\">\n              <TabsTrigger value=\"field\">\n                {sceneType === 'circuit' ? 'Power' : sceneType === 'electric' ? 'Field' : 'Field Strength'}\n              </TabsTrigger>\n              <TabsTrigger value=\"force\">\n                {sceneType === 'circuit' ? 'Current' : 'Force'}\n              </TabsTrigger>\n              <TabsTrigger value=\"energy\">\n                {sceneType === 'circuit' ? 'Energy' : 'Potential'}\n              </TabsTrigger>\n            </TabsList>\n            <TabsContent value=\"field\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: sceneType === 'circuit' ? 'Power (W)' : 'Field Strength', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"field\" stroke=\"#8884d8\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"force\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: sceneType === 'circuit' ? 'Current (A)' : 'Force (N)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey={sceneType === 'circuit' ? 'current' : 'force'} stroke=\"#82ca9d\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n            <TabsContent value=\"energy\" className=\"mt-4\">\n              <ResponsiveContainer width=\"100%\" height={300}>\n                <LineChart data={simulationData}>\n                  <CartesianGrid strokeDasharray=\"3 3\" />\n                  <XAxis dataKey=\"time\" label={{ value: 'Time (s)', position: 'insideBottom', offset: -5 }} />\n                  <YAxis label={{ value: sceneType === 'circuit' ? 'Energy (J)' : 'Potential (V)', angle: -90, position: 'insideLeft' }} />\n                  <Tooltip />\n                  <Line type=\"monotone\" dataKey=\"force\" stroke=\"#ffc658\" strokeWidth={2} />\n                </LineChart>\n              </ResponsiveContainer>\n            </TabsContent>\n          </Tabs>\n        </CardContent>\n      </Card>\n\n      {/* Educational Content */}\n      <Card className=\"mt-6\">\n        <CardHeader>\n          <CardTitle>\n            {sceneType === 'circuit' ? 'Electrical Circuits' : \n             sceneType === 'electric' ? 'Electric Fields & Forces' : 'Magnetic Fields'}\n          </CardTitle>\n        </CardHeader>\n        <CardContent className=\"space-y-4\">\n          {sceneType === 'circuit' ? (\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Ohm's Law</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  The current through a conductor is directly proportional to voltage \n                  and inversely proportional to resistance.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  V = IR\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Power</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  The rate at which electrical energy is transferred by a circuit.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  P = VI = I²R = V²/R\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Energy</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Electrical energy is the capacity to do work using electric power.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  E = Pt = VIt\n                </div>\n              </div>\n            </div>\n          ) : sceneType === 'electric' ? (\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Coulomb's Law</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  The force between two point charges is proportional to the product \n                  of the charges and inversely proportional to the square of distance.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  F = k(q₁q₂)/r²\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Electric Field</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  A region around a charged particle where other charges experience force.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  E = F/q = kQ/r²\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Electric Potential</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  The potential energy per unit charge at a point in an electric field.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  V = kQ/r\n                </div>\n              </div>\n            </div>\n          ) : (\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Magnetic Fields</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Regions around magnets or moving charges where magnetic forces are exerted.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  B = F/(qv)\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Lorentz Force</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  The force on a charged particle moving in a magnetic field.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  F = q(v × B)\n                </div>\n              </div>\n              <div className=\"p-4 border rounded-lg\">\n                <h3 className=\"font-semibold mb-2\">Electromagnetic Induction</h3>\n                <p className=\"text-sm text-muted-foreground mb-3\">\n                  Changing magnetic fields induce electric fields and currents.\n                </p>\n                <div className=\"bg-muted p-3 rounded font-mono text-sm\">\n                  ε = -dΦ/dt\n                </div>\n              </div>\n            </div>\n          )}\n        </CardContent>\n      </Card>\n    </div>\n  )\n}
+  
+  useFrame(() => {
+    if (meshRef.current && isPlaying) {
+      // Animate charge pulsing
+      const scale = 1 + Math.sin(Date.now() * 0.003) * 0.1
+      meshRef.current.scale.set(scale, scale, scale)
+    }
+  })
+
+  return (
+    <Sphere ref={meshRef} position={position} args={[0.3]}>
+      <meshStandardMaterial 
+        color={charge > 0 ? "#FF4444" : "#4444FF"} 
+        emissive={charge > 0 ? "#FF4444" : "#4444FF"}
+        emissiveIntensity={0.3}
+      />
+    </Sphere>
+  )
+}
+
+// Electric field lines
+function ElectricFieldLine({ start, direction, length, steps = 20 }: { 
+  start: [number, number, number]; 
+  direction: [number, number, number]; 
+  length: number; 
+  steps?: number 
+}) {
+  const points = []
+  
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const x = start[0] + direction[0] * length * t
+    const y = start[1] + direction[1] * length * t
+    const z = start[2] + direction[2] * length * t
+    points.push(new THREE.Vector3(x, y, z))
+  }
+
+  return (
+    <Line
+      points={points}
+      color="#FFD700"
+      lineWidth={1}
+      transparent
+      opacity={0.6}
+    />
+  )
+}
+
+// Main component
+export default function ElectricityMagnetismPage() {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [voltage, setVoltage] = useState([12])
+  const [resistance, setResistance] = useState([10])
+  const [charge1, setCharge1] = useState([1])
+  const [charge2, setCharge2] = useState([-1])
+
+  const current = voltage[0] / resistance[0]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">Electricity & Magnetism</h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Explore electric fields, magnetic forces, and circuit behavior through interactive simulations.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  3D Simulation
+                </CardTitle>
+                <CardDescription>
+                  Interactive electricity and magnetism simulation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 rounded-lg overflow-hidden">
+                  <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    
+                    <ElectricCharge position={[-2, 0, 0]} charge={charge1[0]} isPlaying={isPlaying} />
+                    <ElectricCharge position={[2, 0, 0]} charge={charge2[0]} isPlaying={isPlaying} />
+                    
+                    <ElectricFieldLine 
+                      start={[-1.5, 0, 0]} 
+                      direction={[1, 0, 0]} 
+                      length={3} 
+                    />
+                    
+                    <OrbitControls />
+                  </Canvas>
+                </div>
+                
+                <div className="flex justify-center gap-4 mt-4">
+                  <Button 
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="gap-2"
+                  >
+                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIsPlaying(false)
+                      setVoltage([12])
+                      setResistance([10])
+                      setCharge1([1])
+                      setCharge2([-1])
+                    }}
+                    className="gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Controls</CardTitle>
+                <CardDescription>
+                  Adjust simulation parameters
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Tabs defaultValue="electric" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="electric">Electric</TabsTrigger>
+                    <TabsTrigger value="circuit">Circuit</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="electric" className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Charge 1: {charge1[0]}C
+                      </label>
+                      <Slider
+                        value={charge1}
+                        onValueChange={setCharge1}
+                        max={5}
+                        min={-5}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Charge 2: {charge2[0]}C
+                      </label>
+                      <Slider
+                        value={charge2}
+                        onValueChange={setCharge2}
+                        max={5}
+                        min={-5}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="circuit" className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Voltage: {voltage[0]}V
+                      </label>
+                      <Slider
+                        value={voltage}
+                        onValueChange={setVoltage}
+                        max={24}
+                        min={1}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Resistance: {resistance[0]}Ω
+                      </label>
+                      <Slider
+                        value={resistance}
+                        onValueChange={setResistance}
+                        max={100}
+                        min={1}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm">
+                        <strong>Current:</strong> {current.toFixed(2)}A
+                      </p>
+                      <p className="text-sm">
+                        <strong>Power:</strong> {(voltage[0] * current).toFixed(2)}W
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Information</CardTitle>
+                <CardDescription>
+                  Physics concepts demonstrated
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Coulomb's Law</h4>
+                  <p className="text-sm text-muted-foreground">
+                    F = k × (q₁ × q₂) / r²
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The force between charges is proportional to the product of their charges and inversely proportional to the square of the distance between them.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Ohm's Law</h4>
+                  <p className="text-sm text-muted-foreground">
+                    V = I × R
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The voltage across a conductor is directly proportional to the current flowing through it.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Helper hook for frame updates
+function useFrame(callback: (state: any, delta: number) => void) {
+  const requestRef = useRef<number>()
+  const previousTimeRef = useRef<number>()
+  
+  useEffect(() => {
+    const animate = (time: number) => {
+      if (previousTimeRef.current !== undefined) {
+        const deltaTime = (time - previousTimeRef.current) / 1000
+        callback({ time }, deltaTime)
+      }
+      previousTimeRef.current = time
+      requestRef.current = requestAnimationFrame(animate)
+    }
+    
+    requestRef.current = requestAnimationFrame(animate)
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+      }
+    }
+  }, [callback])
+}
