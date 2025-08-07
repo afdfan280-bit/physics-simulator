@@ -5,46 +5,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { Menu, Atom, Waves, Zap, Scale, Activity, X } from 'lucide-react'
+import { Menu, Atom, X } from 'lucide-react'
 import { motion } from 'framer-motion'
-
-const navigationItems = [
-  {
-    title: 'Force & Motion',
-    href: '/force-motion',
-    icon: Activity,
-    description: 'Newton\'s Laws of Motion',
-    color: 'from-blue-500 to-cyan-500'
-  },
-  {
-    title: 'Pressure & Buoyancy',
-    href: '/pressure-buoyancy',
-    icon: Scale,
-    description: 'Archimedes\' Principle',
-    color: 'from-purple-500 to-pink-500'
-  },
-  {
-    title: 'Energy & Work',
-    href: '/energy-work',
-    icon: Atom,
-    description: 'Conservation of Energy',
-    color: 'from-green-500 to-emerald-500'
-  },
-  {
-    title: 'Waves & Optics',
-    href: '/waves-optics',
-    icon: Waves,
-    description: 'Wave Phenomena',
-    color: 'from-orange-500 to-yellow-500'
-  },
-  {
-    title: 'Electricity & Magnetism',
-    href: '/electricity-magnetism',
-    icon: Zap,
-    description: 'Electromagnetic Forces',
-    color: 'from-red-500 to-rose-500'
-  }
-]
+import { physicsModules } from '@/lib/data'
 
 export function PhysicsNavigation() {
   const pathname = usePathname()
@@ -70,7 +33,7 @@ export function PhysicsNavigation() {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1">
-          {navigationItems.map((item) => {
+          {physicsModules.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
             return (
@@ -127,7 +90,7 @@ export function PhysicsNavigation() {
             </div>
             
             <nav className="space-y-2">
-              {navigationItems.map((item) => {
+              {physicsModules.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (
@@ -147,7 +110,7 @@ export function PhysicsNavigation() {
                     <div>
                       <div className="font-medium">{item.title}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">
-                        {item.description}
+                        {item.subtitle}
                       </div>
                     </div>
                   </Link>

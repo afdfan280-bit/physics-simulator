@@ -3,74 +3,9 @@
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Activity, Scale, Atom, Waves, Zap, Play, ArrowRight, Sparkles, BarChart3, Users, BookOpen } from 'lucide-react'
+import { Play, ArrowRight, Sparkles, Atom } from 'lucide-react'
 import { motion } from 'framer-motion'
-
-const modules = [
-  {
-    title: 'Force & Motion',
-    description: 'Master Newton\'s Laws through interactive simulations of forces, acceleration, and momentum.',
-    icon: Activity,
-    href: '/force-motion',
-    color: 'from-blue-500 to-cyan-500',
-    features: ['Interactive force vectors', 'Real-time physics', 'Collision simulations', 'Inclined planes']
-  },
-  {
-    title: 'Pressure & Buoyancy',
-    description: 'Discover Archimedes\' Principle with fluid dynamics and buoyancy experiments.',
-    icon: Scale,
-    href: '/pressure-buoyancy',
-    color: 'from-purple-500 to-pink-500',
-    features: ['Fluid density controls', 'Object submersion', 'Pressure visualization', 'Buoyant force calculations']
-  },
-  {
-    title: 'Energy & Work',
-    description: 'Explore energy conservation, work calculations, and simple machines.',
-    icon: Atom,
-    href: '/energy-work',
-    color: 'from-green-500 to-emerald-500',
-    features: ['Potential/kinetic energy', 'Work-energy theorem', 'Simple machines', 'Energy efficiency']
-  },
-  {
-    title: 'Waves & Optics',
-    description: 'Visualize wave propagation, interference patterns, and optical phenomena.',
-    icon: Waves,
-    href: '/waves-optics',
-    color: 'from-orange-500 to-yellow-500',
-    features: ['Wave interference', 'Refraction and reflection', 'Lens optics', 'Doppler effect']
-  },
-  {
-    title: 'Electricity & Magnetism',
-    description: 'Experiment with electric fields, magnetic forces, and circuit building.',
-    icon: Zap,
-    href: '/electricity-magnetism',
-    color: 'from-red-500 to-rose-500',
-    features: ['Electric field visualization', 'Magnetic interactions', 'Circuit simulation', 'Electromagnetic induction']
-  }
-]
-
-const features = [
-  {
-    icon: BarChart3,
-    title: 'Real-time Analytics',
-    description: 'Live data visualization and performance metrics'
-  },
-  {
-    icon: Users,
-    title: 'Interactive Learning',
-    description: 'Hands-on experiments with immediate feedback'
-  },
-  {
-    icon: BookOpen,
-    title: 'Educational Content',
-    description: 'Comprehensive explanations and guided tutorials'
-  },
-  {
-    icon: Sparkles,
-    title: 'Modern UI/UX',
-    description: 'Intuitive interface with smooth animations'
-  }
-]
+import { physicsModules, features } from '@/lib/data'
 
 export default function Home() {
   return (
@@ -180,7 +115,7 @@ export default function Home() {
           </motion.div>
           
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {modules.map((module, index) => (
+            {physicsModules.map((module, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
